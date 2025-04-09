@@ -1,35 +1,42 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState } from "react";
+import Chatbot from "./components/chatbot";
+import "./App.css";
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [projects] = useState([
+    {
+      id: 1,
+      name: "E-commerce Platform Upgrade",
+      status: "In Progress",
+      riskScore: "Medium",
+      issues: [
+        "Backend team resource shortage",
+        "Payment gateway integration delayed by 2 weeks",
+      ],
+      budgetUtilization: 65,
+    },
+    {
+      id: 2,
+      name: "CRM System Migration",
+      status: "Planning",
+      riskScore: "Low",
+      issues: ["Vendor contract negotiations pending"],
+      budgetUtilization: 15,
+    },
+    {
+      id: 3,
+      name: "AI Customer Support Chatbot",
+      status: "Testing",
+      riskScore: "High",
+      issues: [
+        "Accuracy below target (82% vs 90% goal)",
+        "Client requesting additional features",
+      ],
+      budgetUtilization: 90,
+    },
+  ]);
 
-  return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+  return <Chatbot projects={projects} />;
 }
 
-export default App
+export default App;
