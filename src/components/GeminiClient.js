@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
 
-export const getGeminiResponse = async (prompt, projects) => {
+export const getGeminiResponse = async (prompt, projects, callback) => {
   try {
     const model = genAI.getGenerativeModel({
       model: "gemini-2.0-flash",
@@ -21,17 +21,15 @@ export const getGeminiResponse = async (prompt, projects) => {
     4. Action items
     Keep response concise and focused.`;
 
-    const result = await model.generateContent({
-      contents: [{
-        role: "user",
-        parts: [{ text: fullPrompt }]
-      }]
+    const result = await model.generateContentStream({
+      contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
     });
-    
-    const response = await result.response;
-    return response.text();
+
+    for await (const chunk of result.stream) {
+      const chunkText = await chunk.text();
+      callback(chunkText);
+    }
   } catch (error) {
-    console.error('API Error:', error);
-    throw new Error('Failed to analyze risks. Please try again.');
+    throw new Error("Failed to analyze risks. Please try again.");
   }
 };

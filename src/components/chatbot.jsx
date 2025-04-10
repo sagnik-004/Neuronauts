@@ -1,11 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { getGeminiResponse } from './GeminiClient';
 import ReactMarkdown from 'react-markdown';
-import { Brain, ChevronLeft, Moon, Sun, Send } from 'lucide-react';
+import { Brain, ChevronLeft, Moon, Sun, Send, Plus, ChevronRight } from 'lucide-react';
 import './Chatbot.css';
 
 const Chatbot = ({ projects }) => {
-  const [messages, setMessages] = useState([]);
+  const [conversations, setConversations] = useState([{ 
+    messages: [], 
+    title: 'New Chat' 
+  }]);
+  const [currentConversation, setCurrentConversation] = useState(0);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -47,25 +51,54 @@ const Chatbot = ({ projects }) => {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [conversations, currentConversation]);
 
   const handleSendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
     const userMessage = { text: input, sender: 'user' };
-    setMessages(prev => [...prev, userMessage]);
+    setConversations(prev => {
+      const updated = [...prev];
+      updated[currentConversation] = {
+        ...updated[currentConversation],
+        messages: [...updated[currentConversation].messages, userMessage]
+      };
+      if (updated[currentConversation].messages.length === 1) {
+        updated[currentConversation].title = input.substring(0, 30);
+      }
+      return updated;
+    });
     setInput('');
     setIsLoading(true);
 
     try {
-      const botResponse = await getGeminiResponse(input, projects);
-      setMessages(prev => [...prev, { text: botResponse, sender: 'bot' }]);
+      let fullResponse = '';
+      await getGeminiResponse(input, projects, (chunk) => {
+        fullResponse += chunk;
+        setConversations(prev => {
+          const updated = [...prev];
+          updated[currentConversation] = {
+            ...updated[currentConversation],
+            messages: [
+              ...updated[currentConversation].messages.filter(m => m.sender !== 'bot'),
+              { text: fullResponse, sender: 'bot' }
+            ]
+          };
+          return updated;
+        });
+      });
     } catch (error) {
-      setMessages(prev => [...prev, {
-        text: `Error: ${error.message}`,
-        sender: 'bot',
-        isError: true
-      }]);
+      setConversations(prev => {
+        const updated = [...prev];
+        updated[currentConversation] = {
+          ...updated[currentConversation],
+          messages: [
+            ...updated[currentConversation].messages,
+            { text: `Error: ${error.message}`, sender: 'bot', isError: true }
+          ]
+        };
+        return updated;
+      });
     } finally {
       setIsLoading(false);
     }
@@ -78,34 +111,50 @@ const Chatbot = ({ projects }) => {
     }
   };
 
+  const startNewConversation = () => {
+    setConversations(prev => [...prev, { 
+      messages: [], 
+      title: 'New Chat' 
+    }]);
+    setCurrentConversation(conversations.length);
+  };
+
   return (
     <div className="chat-container">
       <div className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
         <div className="sidebar-header">
-          <div className="brand">
-            <Brain size={24} />
-            {!sidebarCollapsed && <h2>NeuroNauts</h2>}
-          </div>
+          {!sidebarCollapsed && (
+            <div className="brand">
+              <Brain size={24} />
+              <h2>NeuroNAuts</h2>
+            </div>
+          )}
           <button 
             className="collapse-btn"
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
           >
-            <ChevronLeft size={20} />
+            {sidebarCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
           </button>
         </div>
 
-        {!sidebarCollapsed && (
-          <div className="history-section">
-            <h3>Recent Chats</h3>
-            <div className="history-list">
-              {messages.filter(m => m.sender === 'user').map((msg, i) => (
-                <div key={i} className="history-item">
-                  {msg.text.substring(0, 40)}...
-                </div>
-              ))}
-            </div>
+        <button className="new-chat-btn" onClick={startNewConversation}>
+          {sidebarCollapsed ? <Plus size={20} /> : 'New Chat'}
+        </button>
+
+        <div className="history-section">
+          {!sidebarCollapsed && <h3>Conversations</h3>}
+          <div className="history-list">
+            {conversations.map((conv, i) => (
+              <div 
+                key={i} 
+                className={`history-item ${i === currentConversation ? 'active' : ''}`}
+                onClick={() => setCurrentConversation(i)}
+              >
+                {sidebarCollapsed ? `#${i + 1}` : conv.title}
+              </div>
+            ))}
           </div>
-        )}
+        </div>
       </div>
 
       <div className="main-content">
@@ -120,7 +169,7 @@ const Chatbot = ({ projects }) => {
         </div>
 
         <div className="messages-container">
-          {messages.map((message, i) => (
+          {conversations[currentConversation]?.messages.map((message, i) => (
             <div key={i} className={`message ${message.sender}`}>
               <div className="markdown-content">
                 <ReactMarkdown>{message.text}</ReactMarkdown>

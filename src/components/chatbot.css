@@ -12,10 +12,12 @@
   border-right: 1px solid var(--border);
   transition: width 0.3s ease;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .sidebar.collapsed {
-  width: 60px;
+  width: 80px;
 }
 
 .sidebar-header {
@@ -43,22 +45,38 @@
   cursor: pointer;
   padding: 0.5rem;
   color: var(--text-primary);
-  transform: rotate(0deg);
-  transition: transform 0.3s ease;
 }
 
-.sidebar.collapsed .collapse-btn {
-  transform: rotate(180deg);
+.new-chat-btn {
+  margin: 1rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.sidebar.collapsed .new-chat-btn {
+  justify-content: center;
+  padding: 0.75rem;
 }
 
 .history-section {
-  padding: 1rem;
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 1rem 1rem;
 }
 
 .history-section h3 {
   margin: 0 0 1rem 0;
   font-size: 0.9rem;
   color: var(--text-primary);
+  padding: 0 0.5rem;
 }
 
 .history-list {
@@ -74,6 +92,18 @@
   font-size: 0.85rem;
   cursor: pointer;
   transition: background 0.2s ease;
+}
+
+.history-item.active {
+  background: var(--accent);
+  color: white;
+}
+
+.collapsed-conv {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
 }
 
 .main-content {
@@ -114,8 +144,7 @@
   max-width: 75%;
   padding: 1rem 1.25rem;
   border-radius: 1rem;
-  line-height: 1.5;
-  animation: fadeIn 0.3s ease-out;
+  line-height: 1.6;
 }
 
 .message.user {
@@ -188,12 +217,8 @@
   animation: typing 1.4s infinite ease-in-out;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
 @keyframes typing {
   0%, 60%, 100% { transform: translateY(0); }
   30% { transform: translateY(-4px); }
 }
+
