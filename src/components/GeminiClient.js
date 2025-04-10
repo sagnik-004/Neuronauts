@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
 
-export const getGeminiResponse = async (prompt, projects, callback) => {
+export const getGeminiResponse = async (prompt, projectId, callback) => {
   try {
     const model = genAI.getGenerativeModel({
       model: "gemini-2.0-flash",
@@ -13,7 +13,7 @@ export const getGeminiResponse = async (prompt, projects, callback) => {
     });
 
     const fullPrompt = `As a Project Risk Management AI, analyze this query: "${prompt}"
-    Available projects: ${JSON.stringify(projects)}
+    Project ID: ${projectId}
     Provide response in markdown format with:
     1. Risk identification
     2. Impact assessment
