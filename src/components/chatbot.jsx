@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { getGeminiResponse } from "./GeminiClient";
 import ReactMarkdown from "react-markdown";
 import {
   Brain,
@@ -9,6 +8,9 @@ import {
   Send,
   Plus,
   ChevronRight,
+  X,
+  Trash2,
+  Download,
 } from "lucide-react";
 import "./Chatbot.css";
 
@@ -17,8 +19,9 @@ const Chatbot = () => {
     const saved = localStorage.getItem("chatConversations");
     return saved
       ? JSON.parse(saved)
-      : [{ messages: [], title: "New Chat", projectId: "" }];
+      : [{ messages: [], title: "New Chat", projectId: "", reportUrl: "" }];
   });
+
   const [currentConversation, setCurrentConversation] = useState(0);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -28,6 +31,7 @@ const Chatbot = () => {
   const [currentProjectIdInput, setCurrentProjectIdInput] = useState("");
   const textareaRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const sendingRef = useRef(false);
 
   const themes = {
     light: {
@@ -59,7 +63,8 @@ const Chatbot = () => {
   }, [conversations]);
 
   useEffect(() => {
-    if (!conversations[currentConversation]?.projectId) {
+    const currentConv = conversations[currentConversation];
+    if (!currentConv?.projectId) {
       setShowProjectIdModal(true);
     }
   }, [currentConversation]);
@@ -75,97 +80,149 @@ const Chatbot = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversations, currentConversation]);
 
-  const handleProjectIdSubmit = () => {
-    if (!currentProjectIdInput.trim()) return;
+  const fetchReportAndStore = async (projectId) => {
+    try {
+      const response = await fetch("/api/v1/get_report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_id: projectId }),
+      });
 
-    setConversations((prev) => {
-      const updated = [...prev];
-      updated[currentConversation] = {
-        ...updated[currentConversation],
-        projectId: currentProjectIdInput.trim(),
-      };
-      if (updated[currentConversation].messages.length === 0) {
-        updated[currentConversation].title = currentProjectIdInput
-          .trim()
-          .substring(0, 30);
-      }
-      return updated;
-    });
+      const data = await response.json();
+      setConversations((prev) => {
+        const updated = [...prev];
+        updated[currentConversation] = {
+          ...updated[currentConversation],
+          projectId,
+          title: projectId.substring(0, 30),
+          reportUrl: data.file_url || "",
+        };
+        return updated;
+      });
+    } catch (err) {
+      alert("Failed to fetch report: " + err.message);
+    }
+  };
+
+  const handleProjectIdSubmit = async () => {
+    const trimmedId = currentProjectIdInput.trim();
+    if (!trimmedId) return;
+    await fetchReportAndStore(trimmedId);
     setCurrentProjectIdInput("");
     setShowProjectIdModal(false);
   };
 
   const handleSendMessage = async () => {
-    if (
-      !input.trim() ||
-      isLoading ||
-      !conversations[currentConversation]?.projectId
-    )
+    if (sendingRef.current) return;
+    sendingRef.current = true;
+
+    const conv = conversations[currentConversation];
+    if (!input.trim() || isLoading || !conv?.projectId) {
+      sendingRef.current = false;
       return;
+    }
 
     const userMessage = { text: input, sender: "user" };
     setConversations((prev) => {
       const updated = [...prev];
-      updated[currentConversation] = {
-        ...updated[currentConversation],
-        messages: [...updated[currentConversation].messages, userMessage],
-      };
+      updated[currentConversation].messages.push(userMessage);
       return updated;
     });
+
+    const currentInput = input;
     setInput("");
     setIsLoading(true);
 
     try {
-      let fullResponse = "";
-      await getGeminiResponse(
-        input,
-        conversations[currentConversation].projectId,
-        (chunk) => {
-          fullResponse += chunk;
-          setConversations((prev) => {
-            const updated = [...prev];
-            updated[currentConversation] = {
-              ...updated[currentConversation],
-              messages: [
-                ...updated[currentConversation].messages.filter(
-                  (m) => m.sender !== "bot"
-                ),
-                { text: fullResponse, sender: "bot" },
-              ],
-            };
-            return updated;
-          });
-        }
-      );
+      const response = await fetch("/api/v1/get_answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_id: conv.projectId,
+          question: currentInput,
+        }),
+      });
+
+      const data = await response.json();
+
+      setConversations((prev) => {
+        const updated = [...prev];
+        updated[currentConversation].messages.push({
+          text: data.answer || "No response received.",
+          sender: "bot",
+        });
+        return updated;
+      });
     } catch (error) {
       setConversations((prev) => {
         const updated = [...prev];
-        updated[currentConversation] = {
-          ...updated[currentConversation],
-          messages: [
-            ...updated[currentConversation].messages,
-            { text: `Error: ${error.message}`, sender: "bot", isError: true },
-          ],
-        };
+        updated[currentConversation].messages.push({
+          text: `Error: ${error.message}`,
+          sender: "bot",
+          isError: true,
+        });
         return updated;
       });
     } finally {
       setIsLoading(false);
+      sendingRef.current = false;
     }
   };
 
   const handleKeyPress = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !isLoading) {
       e.preventDefault();
       handleSendMessage();
     }
   };
 
   const startNewConversation = () => {
-    const newConv = { messages: [], title: "New Chat", projectId: "" };
+    const newConv = {
+      messages: [],
+      title: "New Chat",
+      projectId: "",
+      reportUrl: "",
+    };
     setConversations((prev) => [...prev, newConv]);
     setCurrentConversation(conversations.length);
     setShowProjectIdModal(true);
+  };
+
+  const deleteConversation = (indexToDelete) => {
+    setConversations((prev) => {
+      const updated = prev.filter((_, i) => i !== indexToDelete);
+
+      if (indexToDelete === currentConversation) {
+        setCurrentConversation(0);
+      } else if (indexToDelete < currentConversation) {
+        setCurrentConversation((prev) => prev - 1);
+      }
+
+      return updated.length > 0
+        ? updated
+        : [{ messages: [], title: "New Chat", projectId: "", reportUrl: "" }];
+    });
+  };
+
+  const clearAllChats = () => {
+    if (window.confirm("Are you sure you want to clear all chats?")) {
+      setConversations([{ messages: [], title: "New Chat", projectId: "", reportUrl: "" }]);
+      setCurrentConversation(0);
+      localStorage.removeItem("chatConversations");
+      setShowProjectIdModal(true);
+    }
+  };
+
+  const exportChats = () => {
+    const blob = new Blob([JSON.stringify(conversations, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "project_chats.json";
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -190,18 +247,14 @@ const Chatbot = () => {
           {!sidebarCollapsed && (
             <div className="brand">
               <Brain size={24} />
-              <h2>NeuroNAuts</h2>
+              <h2>NeuroNauts</h2>
             </div>
           )}
           <button
             className="collapse-btn"
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
           >
-            {sidebarCollapsed ? (
-              <ChevronRight size={20} />
-            ) : (
-              <ChevronLeft size={20} />
-            )}
+            {sidebarCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
           </button>
         </div>
 
@@ -209,18 +262,40 @@ const Chatbot = () => {
           {sidebarCollapsed ? <Plus size={20} /> : "New Chat"}
         </button>
 
+        {!sidebarCollapsed && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", margin: "1rem" }}>
+            <button onClick={clearAllChats} className="new-chat-btn" style={{ background: "#dc3545" }}>
+              <Trash2 size={16} /> Clear All
+            </button>
+            <button onClick={exportChats} className="new-chat-btn" style={{ background: "#198754" }}>
+              <Download size={16} /> Download Chats
+            </button>
+          </div>
+        )}
+
         <div className="history-section">
           {!sidebarCollapsed && <h3>Conversations</h3>}
           <div className="history-list">
             {conversations.map((conv, i) => (
               <div
                 key={i}
-                className={`history-item ${
-                  i === currentConversation ? "active" : ""
-                }`}
-                onClick={() => setCurrentConversation(i)}
+                className={`history-item ${i === currentConversation ? "active" : ""}`}
               >
-                {sidebarCollapsed ? `#${i + 1}` : conv.title}
+                <div
+                  className="chat-title"
+                  onClick={() => setCurrentConversation(i)}
+                  title={conv.title}
+                >
+                  {sidebarCollapsed ? `#${i + 1}` : conv.title}
+                </div>
+                {!sidebarCollapsed && (
+                  <button
+                    className="delete-chat"
+                    onClick={() => deleteConversation(i)}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -239,6 +314,19 @@ const Chatbot = () => {
             {theme === "light" ? <Moon size={20} /> : <Sun size={20} />}
           </button>
         </div>
+
+        {conversations[currentConversation]?.reportUrl && (
+          <div style={{ padding: "1rem" }}>
+            <a
+              href={conversations[currentConversation].reportUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="download-report-btn"
+            >
+              📄 Download Report for this Project
+            </a>
+          </div>
+        )}
 
         <div className="messages-container">
           {conversations[currentConversation]?.messages.map((message, i) => (
